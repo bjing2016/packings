@@ -27,32 +27,59 @@ def distro(loss):
     mean = loss.sqrt().mean() / scale
     return mean, (sqmean - mean**2)
 
-
-m = torch.from_numpy(np.load('k15n100.npy')).cuda().requires_grad_()
-if m is None: m = orthorandom(d=15, k=100).requires_grad_()
-    
-optim = torch.optim.SGD((m,), 0.01)
-maxes = [1]
-beta = 10
-for i in tqdm.trange(5000000 + 1):
-    optim.zero_grad()
-    myloss = loss(m)
-    if i < 20000: beta += 0.001
-    else: beta += 0.0001
-    minmax = softmax(myloss, beta)
-    if i % 1000 == 0: 
+def beta_cycle(optim, m, beta0, dbeta, betas, maxes):
+    bestmax = 1
+    best = None
+    kmax = []
+    i=0
+    while True:
+        optim.zero_grad()
+        myloss = loss(m)
+        beta = beta0 + i * dbeta
+        minmax = softmax(myloss, beta)
         with torch.no_grad(): 
             mymax = torch.max(myloss).item()
-        print(beta, mymax)
-        maxes.append(mymax)
-        if min(maxes) == maxes[-1]:
-            tm = m.detach().cpu().numpy()
-            np.save('k15n100.npy', tm)
         
-    minmax.backward()
-    optim.step()
-    normalize(m)
+        betas.append(beta)
+        maxes.append(mymax)
+        if mymax < bestmax:
+            bestmax = mymax
+            best = m.clone()
+        minmax.backward()
+        optim.step()
+        normalize(m)
+        i+=1
+        if i % 1000 == 0:
+            kmax.append(mymax)
+            print(beta, mymax)      
+            if len(kmax) > 6 and (kmax[-3] > kmax[-2] and kmax[-2] < kmax[-1]) or np.isnan(kmax[-1]):
+                print('Next beta cycle')
+                break
+                    
+    return bestmax, best
 
-m = m.detach().cpu().numpy()
-#np.save(str(torch.max(myloss).item()), m)
+schedule = [
+    (2, 10, 1e-3),
+    (3, 10, 3e-4),
+    (10, 20, 1e-4)
+]
 
+def train(m, beta_schedule):
+    bestmax = 1
+    best = m
+    
+    betas = []
+    maxes = []
+    
+    for beta0, niters, dbeta in schedule:
+        for i in range(niters):
+            best = best.requires_grad_()
+            optim = torch.optim.SGD((best,), 0.01)
+            mymax, mybest = beta_cycle(optim, best, beta0, dbeta, betas, maxes)
+            if mymax < bestmax:
+                bestmax = mymax
+                best = mybest.detach()
+            else: 
+                print('Next beta schedule')
+                break
+    return best.detach().cpu().numpy(), betas, maxes
