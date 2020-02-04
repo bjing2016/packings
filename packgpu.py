@@ -27,9 +27,10 @@ def distro(loss):
     mean = loss.sqrt().mean() / scale
     return mean, (sqmean - mean**2)
 
-def beta_cycle(optim, m, beta0, dbeta, betas, maxes):
+def beta_cycle(m, beta0, dbeta, betas, maxes):
+    optim = torch.optim.SGD((m,), 0.01)
     bestmax = 1
-    best = None
+    best = m.clone()
     kmax = []
     i=0
     while True:
@@ -66,20 +67,24 @@ schedule = [
 
 def train(m, beta_schedule):
     bestmax = 1
-    best = m
+    best = m.clone()
+    m = m.requires_grad_()
     
     betas = []
     maxes = []
     
     for beta0, niters, dbeta in schedule:
         for i in range(niters):
-            best = best.requires_grad_()
-            optim = torch.optim.SGD((best,), 0.01)
-            mymax, mybest = beta_cycle(optim, best, beta0, dbeta, betas, maxes)
+
+            mymax, mybest = beta_cycle(m, beta0, dbeta, betas, maxes)
             if mymax < bestmax:
                 bestmax = mymax
-                best = mybest.detach()
+                print('----UPDATING BEST----')
+                print(best)
+                best = mybest.detach().clone()
+                m = best.clone().requires_grad_()
             else: 
+                m = best.clone().requires_grad_()
                 print('Next beta schedule')
                 break
     return best.detach().cpu().numpy(), betas, maxes
