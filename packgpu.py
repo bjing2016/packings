@@ -78,10 +78,14 @@ def train(m, beta_schedule):
 
             mymax, mybest = beta_cycle(m, beta0, dbeta, betas, maxes)
             if mymax < bestmax:
-                bestmax = mymax
-                print('----UPDATING BEST----')
-                print(best)
-                best = mybest.detach().clone()
+                mybestnp = mybest.detach().cpu().numpy()
+                if not np.isnan(mybestnp).any():
+                    best = mybest.detach().clone()
+                
+                    bestmax = mymax
+                    print('----UPDATING BEST----')
+                    print(best)
+                
                 m = best.clone().requires_grad_()
             else: 
                 m = best.clone().requires_grad_()
