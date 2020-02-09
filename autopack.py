@@ -2,9 +2,10 @@ from packgpu import *
 import numpy as np
 
 tasks = [
-    (64, 500),
-    (128, 800),
-    (128, 900),
+    (50, 1000),
+    (100, 1000),
+    (501, 1000),
+    (512, 1000)
 ]
 
 for d, k in tasks:
